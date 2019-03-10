@@ -1,9 +1,21 @@
 /* eslint-env mocha */
 
-"use strict";
-
 const {assert} = require("chai");
 const BabelWorkerCompiler = require("../");
+
+const presetEnv = [
+    "@babel/preset-env", {
+        targets: {
+            ie: "11"
+        },
+
+        exclude: [
+            "@babel/plugin-transform-typeof-symbol"
+        ],
+
+        modules: false
+    }
+];
 
 describe(BabelWorkerCompiler.brunchPluginName, function() {
     this.timeout(10000); // eslint-disable-line no-invalid-this
@@ -23,7 +35,7 @@ describe(BabelWorkerCompiler.brunchPluginName, function() {
     });
 
     it("should do nothing for no preset", done => {
-        const content = "var c = {};\nvar { a, b } = c;";
+        const content = "let c = {};\nlet { a, b } = c;";
 
         const plugin = new BabelWorkerCompiler({
             plugins: {
@@ -38,20 +50,20 @@ describe(BabelWorkerCompiler.brunchPluginName, function() {
             path: "file.js"
         }, (err, result) => {
             assert.ifError(err);
-            assert.include(result.data, content);
+            assert.include(result.data.replace(/\s/g, ""), content.replace(/\s/g, ""));
             done();
         });
     });
 
     it("should compile and produce valid result", function(done) {
         this.timeout(20000); // eslint-disable-line no-invalid-this
-        const content = "var c = {};\nvar {a, b} = c;";
+        const content = "let c = {};\nlet {a, b} = c;";
         const expected = "var a = c.a,\n    b = c.b;";
 
         const plugin = new BabelWorkerCompiler({
             plugins: {
                 babel: {
-                    presets: ["es2015"]
+                    presets: [presetEnv]
                 }
             }
         });
@@ -68,14 +80,15 @@ describe(BabelWorkerCompiler.brunchPluginName, function() {
 
     it("should compile and produce valid result with workers", function(done) {
         this.timeout(20000); // eslint-disable-line no-invalid-this
-        const content = "var c = {};\nvar {a, b} = c;";
+        const content = "let c = {};\nlet {a, b} = c;";
         const expected = "var a = c.a,\n    b = c.b;";
 
+        BabelWorkerCompiler.prototype.killWorkers();
         const plugin = new BabelWorkerCompiler({
             plugins: {
                 babel: {
                     workers: 1,
-                    presets: ["es2015"],
+                    presets: [presetEnv],
                 }
             }
         });
@@ -94,14 +107,15 @@ describe(BabelWorkerCompiler.brunchPluginName, function() {
     });
 
     it("should load presets/plugins", done => {
-        const content = "var c = () => process.env.NODE_ENV;";
-        const expected = "\"use strict\";\n\nvar c = function c() {\n  return undefined;\n};";
+        process.env.NODE_ENV = "development";
+        const content = "let c = () => process.env.NODE_ENV;";
+        const expected = "var c = function c() {\n  return \"development\";\n};";
 
         const plugin = new BabelWorkerCompiler({
             plugins: {
                 babel: {
-                    presets: ["es2015"],
-                    plugins: ["transform-node-env-inline"]
+                    presets: [presetEnv],
+                    plugins: ["module:babel-plugin-transform-node-env-inline"]
                 }
             }
         });
@@ -117,15 +131,17 @@ describe(BabelWorkerCompiler.brunchPluginName, function() {
     });
 
     it("should load presets/plugins with workers", done => {
+        process.env.NODE_ENV = "development";
         const content = "var c = () => process.env.NODE_ENV;";
-        const expected = "\"use strict\";\n\nvar c = function c() {\n  return undefined;\n};";
+        const expected = "var c = function c() {\n  return \"development\";\n};";
 
+        BabelWorkerCompiler.prototype.killWorkers();
         const plugin = new BabelWorkerCompiler({
             plugins: {
                 babel: {
                     workers: 1,
-                    presets: ["es2015"],
-                    plugins: ["transform-node-env-inline"]
+                    presets: [presetEnv],
+                    plugins: ["module:babel-plugin-transform-node-env-inline"]
                 }
             }
         });
@@ -185,7 +201,6 @@ describe(BabelWorkerCompiler.brunchPluginName, function() {
             });
         });
     });
-
 
     it("should produce source maps", done => {
         const plugin = new BabelWorkerCompiler({
